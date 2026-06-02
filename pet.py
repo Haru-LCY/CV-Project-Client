@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
-import os
-import re
 import sys
-import tempfile
 import textwrap
 import traceback
 from dataclasses import dataclass
@@ -15,8 +10,15 @@ import cv2
 import requests
 from PyQt5.QtCore import QEvent, QPoint, QRect, QSize, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QImage, QPainter, QPixmap
-from PyQt5.QtWidgets import QAction, QApplication, QLabel, QMenu, QMessageBox, QSystemTrayIcon
+from PyQt5.QtWidgets import QAction, QApplication, QDialog, QLabel, QMenu, QMessageBox, QSystemTrayIcon
 
+from character_runtime import (
+    avatar_values_for_emotion,
+    build_reply_messages,
+    normalize_emotion,
+    parse_reply_content,
+    write_image_to_cache,
+)
 from character_workbench import API_BASE_URL, DESCRIPTION_MODEL, CharacterCreatorDialog, LocalCharacterGenerator
 from Murasame import generate, utils
 
@@ -25,6 +27,7 @@ DEFAULT_CHARACTER_NAME = "丛雨"
 DEFAULT_USER_NAME = "用户"
 DEFAULT_FGIMAGE_TARGET = "ムラサメb"
 DEFAULT_EXPRESSION_LAYERS = [1717, 1475, 1261]
+GENERATED_AVATAR_SCALE = 5.0
 
 DEFAULT_CHARACTER_OPTIONS = {
     "appearance_groups": {
@@ -84,13 +87,8 @@ def wrap_text(text: str, width: int = 12) -> str:
 @dataclass
 class PetResponse:
     text: str
-    expression_layers: list[int] | None = None
     emotion: str | None = None
     session_id: str | None = None
-    character_name: str | None = None
-    display_image_url: str | None = None
-    display_image_base64: str | None = None
-    emotion_images: dict | None = None
 
 
 @dataclass
@@ -135,7 +133,14 @@ class PetApiClient:
             },
             json={
                 "model": DESCRIPTION_MODEL,
-                "messages": self._build_reply_messages(event, text, bool(screenshot_base64)),
+                "messages": build_reply_messages(
+                    self.character_profile,
+                    self.user_name,
+                    self.history,
+                    event,
+                    text,
+                    bool(screenshot_base64),
+                ),
                 "stream": False,
                 "temperature": 0.85,
                 "top_p": 1,
@@ -146,102 +151,23 @@ class PetApiClient:
         )
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
-        data = self._parse_reply_content(content)
+        data = parse_reply_content(content)
         reply_text = data.get("text") or content.strip()
-        emotion = data.get("emotion") if data.get("emotion") in {"happy", "angry", "shy", "sad"} else "happy"
+        emotion = normalize_emotion(data.get("emotion"))
         self._remember_turn(text or event, reply_text)
         return PetResponse(
             text=reply_text,
-            expression_layers=data.get("expression_layers"),
             emotion=emotion,
-            session_id=data.get("session_id") or self.session_id,
-            character_name=data.get("character_name") or self.character_profile.name,
-            display_image_url=data.get("display_image_url"),
-            display_image_base64=data.get("display_image_base64"),
-            emotion_images=data.get("emotion_images"),
+            session_id=self.session_id,
         )
 
     def download_image(self, image_url: str | None, image_base64: str | None, key: str) -> str | None:
-        if image_base64:
-            image_bytes = base64.b64decode(image_base64)
-            return self._write_image(image_bytes, key, ".png")
-        if not image_url or not image_url.startswith("data:image/"):
-            return None
-
-        header, encoded = image_url.split(",", 1)
-        suffix = ".png"
-        if "image/jpeg" in header:
-            suffix = ".jpg"
-        elif "image/webp" in header:
-            suffix = ".webp"
-        return self._write_image(base64.b64decode(encoded), key, suffix)
-
-    def _write_image(self, image_bytes: bytes, key: str, suffix: str) -> str:
-        images_dir = os.path.join(tempfile.gettempdir(), "murasame_pet_images")
-        os.makedirs(images_dir, exist_ok=True)
-        safe_suffix = suffix if suffix.lower() in {".png", ".webp", ".jpg", ".jpeg"} else ".png"
-        filename = hashlib.md5(key.encode("utf-8")).hexdigest() + safe_suffix
-        path = os.path.join(images_dir, filename)
-        with open(path, "wb") as f:
-            f.write(image_bytes)
-        return path
+        return write_image_to_cache(image_url, image_base64, key)
 
     def _get_api_key(self) -> str:
         if not self.api_key:
             self.api_key = LocalCharacterGenerator(timeout=int(self.timeout)).api_key
         return self.api_key
-
-    def _build_reply_messages(self, event: str, text: str, has_screenshot: bool) -> list[dict[str, str]]:
-        profile = self.character_profile
-        persona = profile.persona or "日常系二次元桌宠，语气自然、亲近、简短。"
-        system_prompt = f"""
-你正在扮演桌宠角色，需要严格保持角色卡中的说话风格、语气和与用户的关系。
-
-角色名：{profile.name}
-用户称呼：{self.user_name}
-角色卡：{persona}
-初始问候：{profile.greeting}
-
-回复要求：
-- 只用中文回复。
-- 保持桌宠对话的自然口吻，简短、有情绪，但不要替用户做决定。
-- 不要提到 API、模型、系统提示或 JSON 规则。
-- 只输出 JSON，不要 Markdown，不要解释。
-- JSON 字段必须是 {{"text": "回复内容", "emotion": "happy|angry|shy|sad"}}。
-""".strip()
-        if event == "user_text":
-            user_prompt = f"{self.user_name} 对你说：{text}"
-        elif event == "head_touch":
-            user_prompt = f"事件：{text or f'{self.user_name}摸了摸你的头'}"
-        elif event == "screen_context":
-            user_prompt = "事件：桌面状态可能发生了变化。没有可用截图内容，请不要编造看见的具体画面。"
-        else:
-            user_prompt = f"事件：{event}\n内容：{text}"
-        if has_screenshot:
-            user_prompt += "\n注意：本客户端不再发送截图内容，只把该事件作为普通上下文提醒。"
-
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(self.history[-12:])
-        messages.append({"role": "user", "content": user_prompt})
-        return messages
-
-    def _parse_reply_content(self, content: str) -> dict:
-        cleaned = content.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?", "", cleaned).strip()
-            cleaned = re.sub(r"```$", "", cleaned).strip()
-        try:
-            data = json.loads(cleaned)
-            return data if isinstance(data, dict) else {"text": cleaned}
-        except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", cleaned, flags=re.S)
-            if not match:
-                return {"text": cleaned}
-            try:
-                data = json.loads(match.group(0))
-                return data if isinstance(data, dict) else {"text": cleaned}
-            except json.JSONDecodeError:
-                return {"text": cleaned}
 
     def _remember_turn(self, user_text: str, reply_text: str) -> None:
         self.history.extend(
@@ -347,9 +273,10 @@ class DesktopPet(QLabel):
         self.setAttribute(Qt.WA_InputMethodEnabled, True)
         self.mousePressEvent = self.start_move
         self.mouseMoveEvent = self.on_move
+        avatar_url, avatar_base64 = avatar_values_for_emotion(character, "happy")
         self._set_avatar(
-            image_url=character.display_image_url,
-            image_base64=character.display_image_base64,
+            image_url=avatar_url,
+            image_base64=avatar_base64,
             layers=character.expression_layers or DEFAULT_EXPRESSION_LAYERS,
             fgimage_target=character.fgimage_target,
         )
@@ -404,12 +331,14 @@ class DesktopPet(QLabel):
         qimg = QImage(cv_img_bgra.data, width, height, 4 * width, QImage.Format_RGBA8888)
         return QPixmap.fromImage(qimg)
 
-    def _apply_pixmap(self, pixmap: QPixmap) -> None:
+    def _apply_pixmap(self, pixmap: QPixmap, scale_multiplier: float = 1.0) -> None:
         scale = self._scale_factor()
         divisor = int(scale * 2) if scale > 1.0 else 2
+        target_width = max(1, int(pixmap.width() * scale_multiplier / divisor))
+        target_height = max(1, int(pixmap.height() * scale_multiplier / divisor))
         pixmap = pixmap.scaled(
-            pixmap.width() // divisor,
-            pixmap.height() // divisor,
+            target_width,
+            target_height,
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
@@ -434,7 +363,7 @@ class DesktopPet(QLabel):
                 if image_path:
                     pixmap = QPixmap(image_path)
                     if not pixmap.isNull():
-                        self._apply_pixmap(pixmap)
+                        self._apply_pixmap(pixmap, GENERATED_AVATAR_SCALE)
                         return
             except Exception as exc:
                 print(f"Avatar image loading failed: {exc}")
@@ -446,25 +375,13 @@ class DesktopPet(QLabel):
         except Exception as exc:
             print(f"Local expression loading failed: {exc}")
 
-    def _emotion_image_values(self, emotion: str | None) -> tuple[str | None, str | None]:
-        if not emotion or not self.character.emotion_images:
-            return None, None
-        image = self.character.emotion_images.get(emotion)
-        if isinstance(image, str):
-            return image, None
-        if not isinstance(image, dict):
-            return None, None
-        return (
-            image.get("display_image_url") or image.get("url") or image.get("image_url"),
-            image.get("display_image_base64") or image.get("base64") or image.get("image_base64"),
-        )
-
     def set_character(self, character: CharacterProfile) -> None:
         self.character = character
         self.latest_response = character.greeting or self.latest_response
+        avatar_url, avatar_base64 = avatar_values_for_emotion(character, "happy")
         self._set_avatar(
-            image_url=character.display_image_url,
-            image_base64=character.display_image_base64,
+            image_url=avatar_url,
+            image_base64=avatar_base64,
             layers=character.expression_layers or DEFAULT_EXPRESSION_LAYERS,
             fgimage_target=character.fgimage_target,
         )
@@ -621,26 +538,16 @@ class DesktopPet(QLabel):
             return
         if result.session_id:
             self.api_client.session_id = result.session_id
-        if result.character_name:
-            self.character.name = result.character_name
-        if result.emotion_images:
-            self.character.emotion_images = result.emotion_images
         self.latest_response = f"「{wrap_text(result.text)}」"
         self.show_text(self.latest_response, typing=True)
         self.input_buffer = ""
         self.preedit_text = ""
-        emotion_image_url, emotion_image_base64 = self._emotion_image_values(result.emotion)
-        if (
-            result.display_image_url
-            or result.display_image_base64
-            or emotion_image_url
-            or emotion_image_base64
-            or result.expression_layers
-        ):
+        emotion_image_url, emotion_image_base64 = avatar_values_for_emotion(self.character, result.emotion)
+        if emotion_image_url or emotion_image_base64:
             self._set_avatar(
-                image_url=result.display_image_url or emotion_image_url,
-                image_base64=result.display_image_base64 or emotion_image_base64,
-                layers=result.expression_layers,
+                image_url=emotion_image_url,
+                image_base64=emotion_image_base64,
+                layers=self.character.expression_layers,
                 fgimage_target=self.character.fgimage_target,
             )
 
