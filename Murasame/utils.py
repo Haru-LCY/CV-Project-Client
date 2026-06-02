@@ -5,7 +5,6 @@ import os
 DEFAULT_CONFIG = {
     "enable_vl": True,
     "client": {
-        "api_base_url": "http://127.0.0.1:28565",
         "session_id": "local-user",
         "timeout_seconds": 120,
     },
@@ -19,6 +18,18 @@ DEFAULT_CONFIG = {
     },
     "character": {
         "character_id": None,
+        "name": "丛雨",
+        "persona": "",
+        "greeting": "主人，你好呀！",
+        "display_image_url": None,
+        "display_image_base64": None,
+        "expression_layers": [1717, 1475, 1261],
+        "fgimage_target": "ムラサメb",
+        "emotion_images": None,
+        "appearance_traits": None,
+        "personality_traits": None,
+        "identity_traits": None,
+        "style": None,
         "user_name": "用户",
         "auto_open_creator": True,
     },

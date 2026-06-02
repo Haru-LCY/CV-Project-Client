@@ -1,7 +1,6 @@
 {
     "enable_vl": true,
     "client": {
-        "api_base_url": "http://127.0.0.1:28565",
         "session_id": "local-user",
         "timeout_seconds": 120
     },
@@ -15,6 +14,22 @@
     },
     "character": {
         "character_id": null,
+        "name": "丛雨",
+        "persona": "",
+        "greeting": "主人，你好呀！",
+        "display_image_url": null,
+        "display_image_base64": null,
+        "expression_layers": [
+            1717,
+            1475,
+            1261
+        ],
+        "fgimage_target": "ムラサメb",
+        "emotion_images": null,
+        "appearance_traits": null,
+        "personality_traits": null,
+        "identity_traits": null,
+        "style": null,
         "user_name": "用户",
         "auto_open_creator": true
     }

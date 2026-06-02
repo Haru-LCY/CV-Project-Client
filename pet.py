@@ -2,25 +2,22 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
+import re
 import sys
 import tempfile
 import textwrap
 import traceback
 from dataclasses import dataclass
-from io import BytesIO
-from pathlib import Path
-from urllib.parse import urljoin, urlparse
 
 import cv2
-import pyautogui
 import requests
 from PyQt5.QtCore import QEvent, QPoint, QRect, QSize, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QImage, QPainter, QPixmap
-from PyQt5.QtMultimedia import QSound
 from PyQt5.QtWidgets import QAction, QApplication, QLabel, QMenu, QMessageBox, QSystemTrayIcon
 
-from character_workbench import CharacterCreatorDialog
+from character_workbench import API_BASE_URL, DESCRIPTION_MODEL, CharacterCreatorDialog, LocalCharacterGenerator
 from Murasame import generate, utils
 
 screen_worker = None
@@ -30,41 +27,14 @@ DEFAULT_FGIMAGE_TARGET = "ムラサメb"
 DEFAULT_EXPRESSION_LAYERS = [1717, 1475, 1261]
 
 DEFAULT_CHARACTER_OPTIONS = {
-    "appearance_traits": [
-        "黑发",
-        "棕发",
-        "金发",
-        "银白发",
-        "粉发",
-        "黑瞳",
-        "棕瞳",
-        "蓝瞳",
-        "绿瞳",
-        "紫瞳",
-        "长直发",
-        "短发",
-        "中长发",
-        "双马尾",
-        "单马尾",
-        "侧马尾",
-        "波浪卷",
-        "校服",
-        "休闲私服",
-        "针织衫",
-        "衬衫短裙",
-        "运动服",
-        "连衣裙",
-        "眼镜",
-        "发带",
-        "缎带",
-        "发卡",
-        "耳机",
-        "清纯",
-        "可爱",
-        "冷淡",
-        "优雅",
-        "活泼",
-    ],
+    "appearance_groups": {
+        "发色": ["黑发", "棕发", "金发", "银白发", "粉发"],
+        "瞳色": ["黑瞳", "棕瞳", "蓝瞳", "绿瞳", "紫瞳"],
+        "发型": ["长直发", "短发", "中长发", "双马尾", "单马尾", "侧马尾", "波浪卷"],
+        "服装": ["校服", "休闲私服", "针织衫", "衬衫短裙", "运动服", "连衣裙"],
+        "整体风格": ["清纯", "可爱", "冷淡", "优雅", "活泼"],
+    },
+    "appearance_traits": [],
     "personality_traits": [
         "傲娇系",
         "三无冷淡系",
@@ -100,6 +70,12 @@ DEFAULT_CHARACTER_OPTIONS = {
     },
 }
 
+DEFAULT_CHARACTER_OPTIONS["appearance_traits"] = [
+    trait
+    for traits in DEFAULT_CHARACTER_OPTIONS["appearance_groups"].values()
+    for trait in traits
+]
+
 
 def wrap_text(text: str, width: int = 12) -> str:
     return "\n".join(textwrap.wrap(text, width=width, break_long_words=True, break_on_hyphens=False))
@@ -109,12 +85,12 @@ def wrap_text(text: str, width: int = 12) -> str:
 class PetResponse:
     text: str
     expression_layers: list[int] | None = None
-    audio_url: str | None = None
-    audio_base64: str | None = None
+    emotion: str | None = None
     session_id: str | None = None
     character_name: str | None = None
     display_image_url: str | None = None
     display_image_base64: str | None = None
+    emotion_images: dict | None = None
 
 
 @dataclass
@@ -127,6 +103,11 @@ class CharacterProfile:
     display_image_base64: str | None = None
     expression_layers: list[int] | None = None
     fgimage_target: str = DEFAULT_FGIMAGE_TARGET
+    emotion_images: dict | None = None
+    appearance_traits: list[str] | None = None
+    personality_traits: list[str] | None = None
+    identity_traits: list[str] | None = None
+    style: str | None = None
 
 
 class PetApiClient:
@@ -134,136 +115,66 @@ class PetApiClient:
         config = utils.get_config()
         client_config = config.get("client", {})
         character_config = config.get("character", {})
-        self.base_url = client_config.get("api_base_url", "http://127.0.0.1:28565").rstrip("/")
         self.session_id = client_config.get("session_id", "local-user")
         self.timeout = float(client_config.get("timeout_seconds", 120))
         self.character_id = character_config.get("character_id")
         self.user_name = character_config.get("user_name") or DEFAULT_USER_NAME
+        self.character_profile = self._character_from_config(character_config)
+        self.api_key: str | None = None
+        self.history: list[dict[str, str]] = []
 
     def get_character_options(self) -> dict:
-        response = requests.get(f"{self.base_url}/v1/character/options", timeout=self.timeout)
-        response.raise_for_status()
-        data = response.json()
-        return {
-            "appearance_traits": (
-                data.get("appearance_traits")
-                or data.get("moe_traits")
-                or DEFAULT_CHARACTER_OPTIONS["appearance_traits"]
-            ),
-            "personality_traits": data.get("personality_traits") or DEFAULT_CHARACTER_OPTIONS["personality_traits"],
-            "identity_traits": data.get("identity_traits") or DEFAULT_CHARACTER_OPTIONS["identity_traits"],
-            "styles": data.get("styles") or DEFAULT_CHARACTER_OPTIONS["styles"],
-            "defaults": data.get("defaults") or DEFAULT_CHARACTER_OPTIONS["defaults"],
-        }
-
-    def generate_character(
-        self,
-        user_name: str,
-        appearance_traits: list[str],
-        personality_traits: list[str],
-        identity_traits: list[str],
-        style: str,
-    ) -> CharacterProfile:
-        payload = {
-            "session_id": self.session_id,
-            "user_name": user_name,
-            "appearance_traits": appearance_traits,
-            "personality_traits": personality_traits,
-            "identity_traits": identity_traits,
-            "style": style,
-            "constraints": {
-                "transparent_background": True,
-                "safe_for_work": True,
-            },
-        }
-        response = requests.post(f"{self.base_url}/v1/character/generate", json=payload, timeout=self.timeout)
-        response.raise_for_status()
-        return self._character_from_json(response.json())
-
-    def get_character(self, character_id: str) -> CharacterProfile:
-        response = requests.get(f"{self.base_url}/v1/character/{character_id}", timeout=self.timeout)
-        response.raise_for_status()
-        profile = self._character_from_json(response.json())
-        self.character_id = profile.character_id or character_id
-        return profile
-
-    def regenerate_character_image(self, character_id: str) -> CharacterProfile:
-        response = requests.post(
-            f"{self.base_url}/v1/character/regenerate-image",
-            json={"session_id": self.session_id, "character_id": character_id},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        profile = self._character_from_json(response.json())
-        self.character_id = profile.character_id or character_id
-        return profile
+        return DEFAULT_CHARACTER_OPTIONS
 
     def respond(self, event: str, text: str, screenshot_base64: str | None = None) -> PetResponse:
-        payload = {
-            "session_id": self.session_id,
-            "character_id": self.character_id,
-            "user_name": self.user_name,
-            "event": event,
-            "text": text,
-        }
-        if screenshot_base64:
-            payload["screenshot"] = screenshot_base64
-
         response = requests.post(
-            f"{self.base_url}/v1/pet/respond",
-            json=payload,
+            f"{API_BASE_URL}/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self._get_api_key()}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": DESCRIPTION_MODEL,
+                "messages": self._build_reply_messages(event, text, bool(screenshot_base64)),
+                "stream": False,
+                "temperature": 0.85,
+                "top_p": 1,
+                "presence_penalty": 0,
+                "frequency_penalty": 0,
+            },
             timeout=self.timeout,
         )
         response.raise_for_status()
-        data = response.json()
+        content = response.json()["choices"][0]["message"]["content"]
+        data = self._parse_reply_content(content)
+        reply_text = data.get("text") or content.strip()
+        emotion = data.get("emotion") if data.get("emotion") in {"happy", "angry", "shy", "sad"} else "happy"
+        self._remember_turn(text or event, reply_text)
         return PetResponse(
-            text=data.get("text") or data.get("raw_text") or "",
+            text=reply_text,
             expression_layers=data.get("expression_layers"),
-            audio_url=data.get("audio_url"),
-            audio_base64=data.get("audio_base64"),
+            emotion=emotion,
             session_id=data.get("session_id") or self.session_id,
-            character_name=data.get("character_name"),
+            character_name=data.get("character_name") or self.character_profile.name,
             display_image_url=data.get("display_image_url"),
             display_image_base64=data.get("display_image_base64"),
+            emotion_images=data.get("emotion_images"),
         )
-
-    def download_audio(self, result: PetResponse) -> str | None:
-        if result.audio_base64:
-            audio_bytes = base64.b64decode(result.audio_base64)
-            return self._write_audio(audio_bytes, result.text)
-        if not result.audio_url:
-            return None
-
-        audio_url = result.audio_url
-        if not urlparse(audio_url).scheme:
-            audio_url = urljoin(f"{self.base_url}/", audio_url.lstrip("/"))
-        response = requests.get(audio_url, timeout=self.timeout)
-        response.raise_for_status()
-        return self._write_audio(response.content, result.audio_url)
 
     def download_image(self, image_url: str | None, image_base64: str | None, key: str) -> str | None:
         if image_base64:
             image_bytes = base64.b64decode(image_base64)
             return self._write_image(image_bytes, key, ".png")
-        if not image_url:
+        if not image_url or not image_url.startswith("data:image/"):
             return None
 
-        resolved_url = image_url
-        if not urlparse(resolved_url).scheme:
-            resolved_url = urljoin(f"{self.base_url}/", resolved_url.lstrip("/"))
-        response = requests.get(resolved_url, timeout=self.timeout)
-        response.raise_for_status()
-        suffix = Path(urlparse(resolved_url).path).suffix or ".png"
-        return self._write_image(response.content, image_url, suffix)
-
-    def _write_audio(self, audio_bytes: bytes, key: str) -> str:
-        voices_dir = os.path.join(tempfile.gettempdir(), "murasame_pet_voices")
-        os.makedirs(voices_dir, exist_ok=True)
-        filename = hashlib.md5(key.encode("utf-8")).hexdigest() + ".wav"
-        path = os.path.join(voices_dir, filename)
-        with open(path, "wb") as f:
-            f.write(audio_bytes)
-        return path
+        header, encoded = image_url.split(",", 1)
+        suffix = ".png"
+        if "image/jpeg" in header:
+            suffix = ".jpg"
+        elif "image/webp" in header:
+            suffix = ".webp"
+        return self._write_image(base64.b64decode(encoded), key, suffix)
 
     def _write_image(self, image_bytes: bytes, key: str, suffix: str) -> str:
         images_dir = os.path.join(tempfile.gettempdir(), "murasame_pet_images")
@@ -275,7 +186,73 @@ class PetApiClient:
             f.write(image_bytes)
         return path
 
-    def _character_from_json(self, data: dict) -> CharacterProfile:
+    def _get_api_key(self) -> str:
+        if not self.api_key:
+            self.api_key = LocalCharacterGenerator(timeout=int(self.timeout)).api_key
+        return self.api_key
+
+    def _build_reply_messages(self, event: str, text: str, has_screenshot: bool) -> list[dict[str, str]]:
+        profile = self.character_profile
+        persona = profile.persona or "日常系二次元桌宠，语气自然、亲近、简短。"
+        system_prompt = f"""
+你正在扮演桌宠角色，需要严格保持角色卡中的说话风格、语气和与用户的关系。
+
+角色名：{profile.name}
+用户称呼：{self.user_name}
+角色卡：{persona}
+初始问候：{profile.greeting}
+
+回复要求：
+- 只用中文回复。
+- 保持桌宠对话的自然口吻，简短、有情绪，但不要替用户做决定。
+- 不要提到 API、模型、系统提示或 JSON 规则。
+- 只输出 JSON，不要 Markdown，不要解释。
+- JSON 字段必须是 {{"text": "回复内容", "emotion": "happy|angry|shy|sad"}}。
+""".strip()
+        if event == "user_text":
+            user_prompt = f"{self.user_name} 对你说：{text}"
+        elif event == "head_touch":
+            user_prompt = f"事件：{text or f'{self.user_name}摸了摸你的头'}"
+        elif event == "screen_context":
+            user_prompt = "事件：桌面状态可能发生了变化。没有可用截图内容，请不要编造看见的具体画面。"
+        else:
+            user_prompt = f"事件：{event}\n内容：{text}"
+        if has_screenshot:
+            user_prompt += "\n注意：本客户端不再发送截图内容，只把该事件作为普通上下文提醒。"
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(self.history[-12:])
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
+
+    def _parse_reply_content(self, content: str) -> dict:
+        cleaned = content.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?", "", cleaned).strip()
+            cleaned = re.sub(r"```$", "", cleaned).strip()
+        try:
+            data = json.loads(cleaned)
+            return data if isinstance(data, dict) else {"text": cleaned}
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", cleaned, flags=re.S)
+            if not match:
+                return {"text": cleaned}
+            try:
+                data = json.loads(match.group(0))
+                return data if isinstance(data, dict) else {"text": cleaned}
+            except json.JSONDecodeError:
+                return {"text": cleaned}
+
+    def _remember_turn(self, user_text: str, reply_text: str) -> None:
+        self.history.extend(
+            [
+                {"role": "user", "content": user_text},
+                {"role": "assistant", "content": json.dumps({"text": reply_text}, ensure_ascii=False)},
+            ]
+        )
+        self.history = self.history[-12:]
+
+    def _character_from_config(self, data: dict) -> CharacterProfile:
         return CharacterProfile(
             character_id=data.get("character_id") or data.get("id") or self.character_id,
             name=data.get("name") or data.get("character_name") or DEFAULT_CHARACTER_NAME,
@@ -285,16 +262,35 @@ class PetApiClient:
             display_image_base64=data.get("display_image_base64"),
             expression_layers=data.get("expression_layers"),
             fgimage_target=data.get("fgimage_target") or DEFAULT_FGIMAGE_TARGET,
+            emotion_images=data.get("emotion_images"),
+            appearance_traits=data.get("appearance_traits"),
+            personality_traits=data.get("personality_traits"),
+            identity_traits=data.get("identity_traits"),
+            style=data.get("style"),
         )
 
     def remember_character(self, profile: CharacterProfile, user_name: str) -> None:
         config = utils.get_config()
         character_config = config.setdefault("character", {})
         character_config["character_id"] = profile.character_id
+        character_config["name"] = profile.name
+        character_config["persona"] = profile.persona
+        character_config["greeting"] = profile.greeting
+        character_config["display_image_url"] = profile.display_image_url
+        character_config["display_image_base64"] = profile.display_image_base64
+        character_config["expression_layers"] = profile.expression_layers
+        character_config["fgimage_target"] = profile.fgimage_target
+        character_config["emotion_images"] = profile.emotion_images
+        character_config["appearance_traits"] = profile.appearance_traits
+        character_config["personality_traits"] = profile.personality_traits
+        character_config["identity_traits"] = profile.identity_traits
+        character_config["style"] = profile.style
         character_config["user_name"] = user_name or DEFAULT_USER_NAME
         utils.save_config(config)
         self.character_id = profile.character_id
         self.user_name = user_name or DEFAULT_USER_NAME
+        self.character_profile = profile
+        self.history.clear()
 
 
 class DesktopPet(QLabel):
@@ -449,6 +445,19 @@ class DesktopPet(QLabel):
             self._apply_pixmap(self.cvimg_to_qpixmap(cv_img))
         except Exception as exc:
             print(f"Local expression loading failed: {exc}")
+
+    def _emotion_image_values(self, emotion: str | None) -> tuple[str | None, str | None]:
+        if not emotion or not self.character.emotion_images:
+            return None, None
+        image = self.character.emotion_images.get(emotion)
+        if isinstance(image, str):
+            return image, None
+        if not isinstance(image, dict):
+            return None, None
+        return (
+            image.get("display_image_url") or image.get("url") or image.get("image_url"),
+            image.get("display_image_base64") or image.get("base64") or image.get("image_base64"),
+        )
 
     def set_character(self, character: CharacterProfile) -> None:
         self.character = character
@@ -614,21 +623,23 @@ class DesktopPet(QLabel):
             self.api_client.session_id = result.session_id
         if result.character_name:
             self.character.name = result.character_name
-        if result.audio_url or result.audio_base64:
-            try:
-                audio_path = self.api_client.download_audio(result)
-                if audio_path:
-                    QSound.play(audio_path)
-            except Exception as exc:
-                print(f"Audio playback failed: {exc}")
+        if result.emotion_images:
+            self.character.emotion_images = result.emotion_images
         self.latest_response = f"「{wrap_text(result.text)}」"
         self.show_text(self.latest_response, typing=True)
         self.input_buffer = ""
         self.preedit_text = ""
-        if result.display_image_url or result.display_image_base64 or result.expression_layers:
+        emotion_image_url, emotion_image_base64 = self._emotion_image_values(result.emotion)
+        if (
+            result.display_image_url
+            or result.display_image_base64
+            or emotion_image_url
+            or emotion_image_base64
+            or result.expression_layers
+        ):
             self._set_avatar(
-                image_url=result.display_image_url,
-                image_base64=result.display_image_base64,
+                image_url=result.display_image_url or emotion_image_url,
+                image_base64=result.display_image_base64 or emotion_image_base64,
                 layers=result.expression_layers,
                 fgimage_target=self.character.fgimage_target,
             )
@@ -646,14 +657,7 @@ class ScreenWorker(QThread):
     def run(self) -> None:
         while self.running:
             if self.should_capture:
-                try:
-                    screenshot = pyautogui.screenshot()
-                    buffered = BytesIO()
-                    screenshot.save(buffered, format="PNG")
-                    encoded = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    self.screen_result.emit(encoded)
-                except Exception:
-                    traceback.print_exc()
+                self.screen_result.emit("")
             self.sleep(30)
 
     def stop(self) -> None:
@@ -681,16 +685,14 @@ class ApiWorker(QThread):
 
 def clear_history(parent, api_client: PetApiClient) -> None:
     api_client.session_id = utils.get_config().get("client", {}).get("session_id", "local-user")
+    api_client.history.clear()
     parent.latest_response = "记忆已经清空了。"
     parent.show_text(parent.latest_response, typing=True)
 
 
 def load_initial_character(api_client: PetApiClient) -> CharacterProfile:
-    if api_client.character_id:
-        try:
-            return api_client.get_character(api_client.character_id)
-        except Exception as exc:
-            print(f"Failed to load configured character: {exc}")
+    if api_client.character_profile.character_id or api_client.character_profile.persona:
+        return api_client.character_profile
     return CharacterProfile(expression_layers=DEFAULT_EXPRESSION_LAYERS)
 
 
@@ -719,12 +721,20 @@ def open_character_settings(parent: DesktopPet, api_client: PetApiClient) -> Non
 
 
 def regenerate_character_image(parent: DesktopPet, api_client: PetApiClient) -> None:
-    if not api_client.character_id:
-        QMessageBox.information(parent, "缺少角色", "请先创建角色。")
+    profile = api_client.character_profile
+    if not (profile.appearance_traits and profile.personality_traits and profile.identity_traits and profile.style):
+        QMessageBox.information(parent, "缺少角色设定", "请先在角色设置中生成并应用角色。")
         return
     try:
-        character = api_client.regenerate_character_image(api_client.character_id)
-        parent.set_character(character)
+        regenerated = LocalCharacterGenerator(timeout=int(api_client.timeout)).generate(
+            user_name=api_client.user_name,
+            appearance_traits=profile.appearance_traits,
+            personality_traits=profile.personality_traits,
+            identity_traits=profile.identity_traits,
+            style=profile.style,
+        )
+        api_client.remember_character(regenerated, api_client.user_name)
+        parent.set_character(regenerated)
     except Exception as exc:
         traceback.print_exc()
         QMessageBox.warning(parent, "重新生成人设图失败", f"{type(exc).__name__}: {exc}")
@@ -761,7 +771,7 @@ if __name__ == "__main__":
     tray_icon.show()
 
     desktop_pet.show_text(desktop_pet.latest_response, typing=True)
-    if not api_client.character_id and utils.get_config().get("character", {}).get("auto_open_creator", True):
+    if not api_client.character_profile.character_id and utils.get_config().get("character", {}).get("auto_open_creator", True):
         QTimer.singleShot(500, lambda: open_character_settings(desktop_pet, api_client))
 
     screen_worker = ScreenWorker(api_client)

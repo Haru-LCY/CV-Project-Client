@@ -15,28 +15,36 @@
         <p>选择日常系二次元设定，生成预览后再应用到桌宠。</p>
       </header>
 
-      <div class="field-row">
-        <label for="userName">你的称呼</label>
-        <input id="userName" type="text" autocomplete="off">
+      <div class="history-bar">
+        <label for="historySelect">历史角色</label>
+        <select id="historySelect"></select>
+        <button id="loadHistoryButton" type="button" class="secondary" disabled>加载角色</button>
       </div>
 
-      <div class="field-row">
-        <label for="styleSelect">画风</label>
-        <select id="styleSelect"></select>
+      <div class="setup-bar">
+        <div class="field-row">
+          <label for="userName">你的称呼</label>
+          <input id="userName" type="text" autocomplete="off">
+        </div>
+
+        <div class="field-row">
+          <label for="styleSelect">画风</label>
+          <select id="styleSelect"></select>
+        </div>
       </div>
 
-      <div class="traits-grid">
-        <section class="trait-group">
+      <div class="traits-stack">
+        <section class="trait-group appearance-group">
           <h2>外貌设定</h2>
           <div id="appearanceTraits" class="chip-list"></div>
         </section>
 
-        <section class="trait-group">
+        <section class="trait-group personality-group">
           <h2>性格设定</h2>
           <div id="personalityTraits" class="chip-list"></div>
         </section>
 
-        <section class="trait-group">
+        <section class="trait-group identity-group">
           <h2>身份设定</h2>
           <div id="identityTraits" class="chip-list"></div>
         </section>
@@ -45,8 +53,17 @@
 
     <section class="preview-pane">
       <div class="preview-frame">
+        <div class="stage-glow"></div>
         <div id="imagePlaceholder" class="image-placeholder">还没有生成预览</div>
         <img id="previewImage" alt="角色预览图" hidden>
+        <div class="stage-floor"></div>
+      </div>
+
+      <div id="emotionTabs" class="emotion-tabs" aria-label="情感预览">
+        <button type="button" class="emotion-tab is-active" data-emotion="happy">开心</button>
+        <button type="button" class="emotion-tab" data-emotion="angry">生气</button>
+        <button type="button" class="emotion-tab" data-emotion="shy">害羞</button>
+        <button type="button" class="emotion-tab" data-emotion="sad">伤心</button>
       </div>
 
       <div class="profile-card">
@@ -67,6 +84,7 @@
     <p id="statusText">选择外貌、性格和身份后，点击“生成预览”。</p>
     <div class="actions">
       <button id="generateButton" type="button">生成预览</button>
+      <button id="saveCardButton" type="button" disabled>保存角色卡</button>
       <button id="applyButton" type="button" disabled>应用角色</button>
       <button id="cancelButton" type="button" class="secondary">取消</button>
     </div>
