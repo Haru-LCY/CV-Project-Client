@@ -22,6 +22,7 @@ from character_runtime import (
     write_image_to_cache,
 )
 from character_workbench import API_BASE_URL, DESCRIPTION_MODEL, CharacterCreatorDialog, LocalCharacterGenerator
+from memory_runtime import MemoryStore, sanitize_memory_text
 from Murasame import utils
 
 screen_worker = None
@@ -123,6 +124,7 @@ class PetApiClient:
         self.character_id = character_config.get("character_id")
         self.user_name = character_config.get("user_name") or DEFAULT_USER_NAME
         self.character_profile = self._character_from_config(character_config)
+        self.memory = MemoryStore.from_config(config)
         self.api_key: str | None = None
         self.history: list[dict[str, str]] = []
 
@@ -130,6 +132,8 @@ class PetApiClient:
         return DEFAULT_CHARACTER_OPTIONS
 
     def respond(self, event: str, text: str, screenshot_base64: str | None = None) -> PetResponse:
+        memory_query = self._memory_query(event, text)
+        retrieved_memories = self.memory.search(memory_query, self.memory.config.user_id, self.memory.config.top_k)
         messages = build_reply_messages(
             self.character_profile,
             self.user_name,
@@ -137,6 +141,7 @@ class PetApiClient:
             event,
             text,
             bool(screenshot_base64),
+            retrieved_memories,
         )
         model = DESCRIPTION_MODEL
         if event == "screen_context" and screenshot_base64:
@@ -172,7 +177,8 @@ class PetApiClient:
         data = parse_reply_content(content)
         reply_text = data.get("text") or content.strip()
         emotion = normalize_emotion(data.get("emotion"))
-        self._remember_turn(text or event, reply_text)
+        desktop_summary = str(data.get("desktop_summary") or "").strip()
+        self._remember_turn(event, text, reply_text, desktop_summary)
         return PetResponse(
             text=reply_text,
             emotion=emotion,
@@ -187,14 +193,32 @@ class PetApiClient:
             self.api_key = LocalCharacterGenerator(timeout=int(self.timeout)).api_key
         return self.api_key
 
-    def _remember_turn(self, user_text: str, reply_text: str) -> None:
+    def _remember_turn(self, event: str, user_text: str, reply_text: str, desktop_summary: str = "") -> None:
+        short_term_user_text = user_text or event
         self.history.extend(
             [
-                {"role": "user", "content": user_text},
+                {"role": "user", "content": short_term_user_text},
                 {"role": "assistant", "content": json.dumps({"text": reply_text}, ensure_ascii=False)},
             ]
         )
         self.history = self.history[-12:]
+        metadata = {
+            "event": event,
+            "session_id": self.session_id,
+            "user_id": self.memory.config.user_id,
+        }
+        if event == "screen_context":
+            summary = desktop_summary or reply_text
+            self.memory.add_desktop_observation(summary, reply_text, metadata)
+            return
+        self.memory.add_turn(user_text or event, reply_text, metadata)
+
+    def _memory_query(self, event: str, text: str) -> str:
+        if event == "screen_context":
+            return "桌面观察 当前任务 应用 文档"
+        if text.strip():
+            return sanitize_memory_text(text)
+        return event
 
     def _character_from_config(self, data: dict) -> CharacterProfile:
         return CharacterProfile(
@@ -653,7 +677,13 @@ class ApiWorker(QThread):
 def clear_history(parent, api_client: PetApiClient) -> None:
     api_client.session_id = utils.get_config().get("client", {}).get("session_id", "local-user")
     api_client.history.clear()
-    parent.latest_response = "记忆已经清空了。"
+    parent.latest_response = "本轮对话已经清空了。"
+    parent.show_text(parent.latest_response, typing=True)
+
+
+def clear_long_term_memory(parent, api_client: PetApiClient) -> None:
+    api_client.memory.clear_user(api_client.memory.config.user_id)
+    parent.latest_response = "长期记忆已经清空了。"
     parent.show_text(parent.latest_response, typing=True)
 
 
@@ -727,13 +757,16 @@ if __name__ == "__main__":
     character_action.triggered.connect(desktop_pet.settings_requested.emit)
     regenerate_image_action = QAction("重新生成人设图")
     regenerate_image_action.triggered.connect(lambda: regenerate_character_image(desktop_pet, api_client))
-    clear_action = QAction("清空记忆")
+    clear_action = QAction("清空本轮对话")
     clear_action.triggered.connect(lambda: clear_history(desktop_pet, api_client))
+    clear_long_term_action = QAction("清空长期记忆")
+    clear_long_term_action.triggered.connect(lambda: clear_long_term_memory(desktop_pet, api_client))
     exit_action = QAction("退出")
     exit_action.triggered.connect(app.quit)
     tray_menu.addAction(character_action)
     tray_menu.addAction(regenerate_image_action)
     tray_menu.addAction(clear_action)
+    tray_menu.addAction(clear_long_term_action)
     tray_menu.addAction(exit_action)
     tray_icon.setContextMenu(tray_menu)
     tray_icon.show()

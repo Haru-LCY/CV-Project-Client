@@ -22,6 +22,21 @@ DEFAULT_CONFIG = {
             "text_y_offset": 20,
         },
     },
+    "memory": {
+        "enabled": True,
+        "provider": "mem0_local",
+        "user_id": None,
+        "top_k": 5,
+        "store_screenshots": False,
+        "desktop_summary_enabled": True,
+        "storage_path": ".memory/local_memory.jsonl",
+        "mem0": {
+            "history_db_path": ".memory/mem0_history.db",
+            "vector_path": ".memory/qdrant",
+            "llm": None,
+            "embedder": None,
+        },
+    },
     "character": {
         "character_id": None,
         "name": "丛雨",

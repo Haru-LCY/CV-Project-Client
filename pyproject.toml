@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=1.26.0",
     "opencv-python==4.11.0.86",
     "Pillow==11.3.0",
+    "mem0ai",
     "pyautogui==0.9.54",
     "PyQt5==5.15.11",
     "PyQtWebEngine==5.15.7",

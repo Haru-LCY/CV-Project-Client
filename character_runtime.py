@@ -19,6 +19,7 @@ def build_reply_messages(
     event: str,
     text: str,
     has_screenshot: bool,
+    retrieved_memories: list[str] | None = None,
 ) -> list[dict[str, str]]:
     persona = getattr(profile, "persona", None) or "日常系二次元桌宠，语气自然、亲近、简短。"
     appearance = _join_traits(getattr(profile, "appearance_traits", None))
@@ -34,8 +35,11 @@ def build_reply_messages(
 外貌标签：{appearance}
 性格标签：{personality}
 身份标签：{identity}
+长期记忆参考：
+{_format_memories(retrieved_memories)}
 
 回复要求：
+- 长期记忆只作为参考；如果它和角色卡冲突，必须以角色卡为准。
 - 只用中文回复。
 - 文本要像该角色本人在和用户说话，优先体现性格标签和角色卡中的口癖、亲疏感、态度。
 - 回复应简短自然，通常 1-3 句；可以有情绪，但不要替用户做决定。
@@ -44,7 +48,8 @@ def build_reply_messages(
 - 根据回复时角色的主要情绪选择 emotion：
   happy=开心/平静友好/鼓励，angry=生气/不满/吐槽，shy=害羞/被夸/心虚，sad=难过/失落/担心。
 - 只输出 JSON，不要 Markdown，不要解释。
-- JSON 字段必须是 {{"text": "回复内容", "emotion": "happy|angry|shy|sad"}}。
+- JSON 字段必须包含 {{"text": "回复内容", "emotion": "happy|angry|shy|sad"}}。
+- 如果正在处理桌面截图，可以额外输出 desktop_summary，简短概括截图中明确可见、值得记住的非敏感内容。
 """.strip()
 
     if event == "user_text":
@@ -57,6 +62,7 @@ def build_reply_messages(
 事件：你刚刚看了一眼{user_name}的桌面截图。
 请基于截图中明确可见的内容，用角色口吻做一句简短自然的回应。
 不要复述长段文字、不要泄露敏感信息、不要假装能看到截图外的内容。
+如果截图中有值得之后记住的任务、应用、文档或用户活动，请在 desktop_summary 中用一句话概括；否则留空字符串。
 """.strip()
         else:
             user_prompt = "事件：桌面状态可能发生了变化。没有可用截图内容，请不要编造看见的具体画面。"
@@ -146,6 +152,12 @@ def _join_traits(traits: Any) -> str:
     if isinstance(traits, list):
         return "、".join(str(trait) for trait in traits) or "未指定"
     return str(traits)
+
+
+def _format_memories(memories: list[str] | None) -> str:
+    if not memories:
+        return "无"
+    return "\n".join(f"- {memory}" for memory in memories if memory.strip()) or "无"
 
 
 def _emotion_image_values(emotion_images: Any, emotion: str | None) -> tuple[str | None, str | None]:
