@@ -29,7 +29,7 @@
 export API_KEY="your_api_key"
 ```
 
-或在项目根目录创建 `apikey.md`，写入 API key。
+或在用户数据目录创建 `apikey.md`，写入 API key。
 
 安装依赖并启动：
 
@@ -51,7 +51,7 @@ Windows 下也可以直接使用本地 uv 环境运行：
 - `.memory/`
 - `character_cards/`
 
-如果使用 `.app` 且不想设置环境变量，请创建 `~/Library/Application Support/MurasamePet/apikey.md`，写入 API key。
+如果使用 `.app` 且不想设置环境变量，请创建 `~/Library/Application Support/MurasamePet/apikey.md`，写入 API key。开发模式下如果项目根目录还保留旧的 `apikey.md`，第一次运行会自动拷贝到这个位置。
 
 首次没有角色卡时，客户端会打开角色生成工作台。选择外貌、性格、身份、画风和称呼后点击“生成预览”，确认后点击“应用角色”，角色卡会保存到 `config.json`，后续对话会按该角色卡的语气回复。
 

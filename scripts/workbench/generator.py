@@ -10,7 +10,7 @@ from typing import Any
 
 import requests
 
-from Murasame.paths import resource_path, user_data_path
+from Murasame.paths import copy_seed_file, user_data_path
 from scripts.character_traits import format_dimension_guidance, normalize_dimensions
 from scripts.profile import CharacterProfile as GeneratedCharacterProfile
 from scripts.workbench.constants import API_BASE_URL, DESCRIPTION_MODEL, EMOTION_SPECS, IMAGE_MODEL, REFERENCE_EMOTIONS
@@ -76,13 +76,8 @@ class LocalCharacterGenerator:
         env_key = os.environ.get("API_KEY")
         if env_key:
             return env_key.strip().strip('"')
-        candidate_paths = [self.api_key_path]
-        source_api_key_path = resource_path("apikey.md")
-        if source_api_key_path.exists() and source_api_key_path not in candidate_paths:
-            candidate_paths.append(source_api_key_path)
-
-        api_key_path = next((path for path in candidate_paths if path.exists()), None)
-        if api_key_path is None:
+        api_key_path = self.api_key_path if self.api_key_path.exists() else copy_seed_file("apikey.md")
+        if not api_key_path.exists():
             raise ApiKeyNotFoundError(f"找不到 API key 文件，请创建 {self.api_key_path}")
         for line in api_key_path.read_text(encoding="utf-8").splitlines():
             value = line.strip()
