@@ -16,8 +16,10 @@ from urllib.parse import urlparse
 
 import requests
 from PIL import Image, ImageFilter, ImageOps
-from PyQt5.QtCore import QObject, QThread, QUrl, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, Qt, QThread, QUrl, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout
+
+from Murasame.paths import resource_path, seed_character_cards, user_data_path
 
 
 API_BASE_URL = "https://maas-openapi.wanjiedata.com"
@@ -57,7 +59,7 @@ class ApiKeyNotFoundError(RuntimeError):
 
 class LocalCharacterGenerator:
     def __init__(self, api_key_path: Path | None = None, timeout: int = 180) -> None:
-        self.api_key_path = api_key_path or Path(__file__).resolve().parent / "apikey.md"
+        self.api_key_path = api_key_path or user_data_path("apikey.md")
         self.timeout = timeout
         self.api_key = self._load_api_key()
 
@@ -110,9 +112,15 @@ class LocalCharacterGenerator:
         env_key = os.environ.get("API_KEY")
         if env_key:
             return env_key.strip().strip('"')
-        if not self.api_key_path.exists():
-            raise ApiKeyNotFoundError(f"找不到 {self.api_key_path.name}")
-        for line in self.api_key_path.read_text(encoding="utf-8").splitlines():
+        candidate_paths = [self.api_key_path]
+        source_api_key_path = resource_path("apikey.md")
+        if source_api_key_path.exists() and source_api_key_path not in candidate_paths:
+            candidate_paths.append(source_api_key_path)
+
+        api_key_path = next((path for path in candidate_paths if path.exists()), None)
+        if api_key_path is None:
+            raise ApiKeyNotFoundError(f"找不到 API key 文件，请创建 {self.api_key_path}")
+        for line in api_key_path.read_text(encoding="utf-8").splitlines():
             value = line.strip()
             if not value:
                 continue
@@ -125,7 +133,7 @@ class LocalCharacterGenerator:
                 continue
             if len(value) > 24 and " " not in value:
                 return value
-        raise ApiKeyNotFoundError(f"{self.api_key_path.name} 中没有找到可用 API_KEY")
+        raise ApiKeyNotFoundError(f"{api_key_path} 中没有找到可用 API_KEY")
 
     def _generate_description(
         self,
@@ -693,7 +701,7 @@ class CharacterWorkbenchBridge(QObject):
             self.cardSaveFailed.emit("请先生成预览，再保存角色卡。")
             return
         try:
-            cards_dir = Path(__file__).resolve().parent / "character_cards"
+            cards_dir = self._cards_dir()
             cards_dir.mkdir(parents=True, exist_ok=True)
             profile = self.dialog.preview_profile
             filename = self._safe_card_filename(getattr(profile, "name", None), getattr(profile, "character_id", None))
@@ -766,7 +774,7 @@ class CharacterWorkbenchBridge(QObject):
         return f"{safe_name or 'character'}_{safe_id or uuid.uuid4().hex[:12]}.json"
 
     def _cards_dir(self) -> Path:
-        return Path(__file__).resolve().parent / "character_cards"
+        return seed_character_cards()
 
     def _history_card_summaries(self) -> list[dict]:
         cards_dir = self._cards_dir()
@@ -911,6 +919,15 @@ class CharacterCreatorDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("角色生成工作台")
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowMinimizeButtonHint
+            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
         self.resize(1040, 720)
         self.preview_profile = None
         self.preview_is_current = False
@@ -938,5 +955,5 @@ class CharacterCreatorDialog(QDialog):
         self.channel.registerObject("characterWorkbench", self.bridge)
         self.web_view.page().setWebChannel(self.channel)
 
-        html_path = Path(__file__).resolve().parent / "ui" / "character_workbench.html"
+        html_path = resource_path("ui", "character_workbench.html")
         self.web_view.load(QUrl.fromLocalFile(str(html_path)))

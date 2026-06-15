@@ -38,7 +38,38 @@ uv sync
 uv run python pet.py
 ```
 
+首次运行会在 macOS 的 `~/Library/Application Support/MurasamePet/` 下创建或复制运行配置。打包后的 `.app` 也从这个目录读取用户数据：
+
+- `config.json`
+- `apikey.md`
+- `.memory/`
+- `character_cards/`
+
+如果使用 `.app` 且不想设置环境变量，请创建 `~/Library/Application Support/MurasamePet/apikey.md`，写入 API key。
+
 首次没有角色卡时，客户端会打开角色生成工作台。选择外貌、性格、身份、画风和称呼后点击“生成预览”，确认后点击“应用角色”，角色卡会保存到 `config.json`，后续对话会按该角色卡的语气回复。
+
+## macOS 打包
+
+本项目提供 `MurasamePet.spec`，用于生成本机可双击运行的 macOS 应用：
+
+```bash
+uv run --with pyinstaller pyinstaller MurasamePet.spec
+```
+
+构建完成后应用位于：
+
+```bash
+dist/MurasamePet.app
+```
+
+打包不会内置 `apikey.md`。如需让 `.app` 调用外部 API，请使用环境变量 `API_KEY`，或把 `apikey.md` 放到：
+
+```bash
+~/Library/Application Support/MurasamePet/apikey.md
+```
+
+如果启用桌面视觉观察，macOS 可能会在首次运行时请求屏幕录制权限。
 
 ## 配置
 

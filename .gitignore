@@ -187,3 +187,6 @@ murasame_*
 character_cards/*
 .memory
 tests
+
+
+*.spec

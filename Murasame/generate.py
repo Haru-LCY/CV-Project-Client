@@ -2,10 +2,13 @@ import csv
 import cv2
 import numpy as np
 
+from Murasame.paths import resource_path
+
 
 def generate_fgimage(target, embeddings_layers):
     assert target in ["ムラサメa", "ムラサメb"]
-    with open(f"./fgimages/{target}.txt", encoding='utf-16 le') as cf:
+    fgimages_dir = resource_path("fgimages")
+    with (fgimages_dir / f"{target}.txt").open(encoding='utf-16 le') as cf:
         infos = list(csv.reader(cf, delimiter='\t'))
 
     if target == "ムラサメa":
@@ -27,7 +30,7 @@ def generate_fgimage(target, embeddings_layers):
     canvas = np.zeros((canvas_scale[1], canvas_scale[0], 4), dtype=np.uint8)
 
     for idx, pos in enumerate(all_positions):
-        path = f"./fgimages/{target}_{embeddings_layers[idx]}.png"
+        path = fgimages_dir / f"{target}_{embeddings_layers[idx]}.png"
         image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), -1)
         if image is not None:
             x_offset = pos[0]

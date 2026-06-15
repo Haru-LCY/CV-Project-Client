@@ -13,7 +13,7 @@ import requests
 from PIL import Image
 from PyQt5.QtCore import QEvent, QPoint, QRect, QSize, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QImage, QPainter, QPixmap
-from PyQt5.QtWidgets import QAction, QApplication, QDialog, QLabel, QMenu, QMessageBox, QSystemTrayIcon, QToolButton
+from PyQt5.QtWidgets import QAction, QApplication, QDialog, QLabel, QMenu, QMessageBox, QStyle, QSystemTrayIcon, QToolButton
 
 from character_runtime import (
     avatar_values_for_emotion,
@@ -24,6 +24,8 @@ from character_runtime import (
 )
 from character_workbench import API_BASE_URL, DESCRIPTION_MODEL, CharacterCreatorDialog, LocalCharacterGenerator
 from memory_runtime import MemoryStore, sanitize_memory_text
+from Murasame.macos_window import apply_top_layer
+from Murasame.paths import resource_path
 from Murasame import utils
 
 screen_worker = None
@@ -323,6 +325,7 @@ class DesktopPet(QLabel):
         self.touch_head = False
         self.head_press_x: int | None = None
         self.llm_worker: ApiWorker | None = None
+        self.character_dialog: CharacterCreatorDialog | None = None
         self.settings_button_size = self._scaled_value(34)
 
         config = utils.get_config()
@@ -336,23 +339,59 @@ class DesktopPet(QLabel):
         self.text_x_offset_default = int(preset.get("text_x_offset", 140))
         self.text_y_offset_default = int(preset.get("text_y_offset", 20))
 
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         self.text_font = QFont()
         self.text_font.setFamily("思源黑体 CN Bold")
-        QFontDatabase.addApplicationFont("./思源黑体Bold.otf")
+        QFontDatabase.addApplicationFont(str(resource_path("思源黑体Bold.otf")))
         self.text_font.setPointSize(self._scaled_value(24))
         self.text_x_offset = 0
         self.text_y_offset = 0
-        self.settings_button = QToolButton(self)
-        self.settings_button.setIcon(QIcon("icon.png"))
+        self.settings_button = self._create_control_button("角色设置")
+        self.settings_button.setIcon(QIcon(str(resource_path("icon.png"))))
         self.settings_button.setIconSize(QSize(self._scaled_value(20), self._scaled_value(20)))
-        self.settings_button.setFixedSize(self.settings_button_size, self.settings_button_size)
-        self.settings_button.setToolTip("角色设置")
-        self.settings_button.setCursor(Qt.PointingHandCursor)
         self.settings_button.clicked.connect(self.settings_requested.emit)
-        self.settings_button.setStyleSheet(
+
+        self.exit_button = self._create_control_button("退出")
+        self.exit_button.setIcon(self.style().standardIcon(QStyle.SP_DialogCloseButton))
+        self.exit_button.setIconSize(QSize(self._scaled_value(18), self._scaled_value(18)))
+        self.exit_button.clicked.connect(QApplication.instance().quit)
+
+        self.typing_timer = QTimer()
+        self.typing_timer.timeout.connect(self._typing_step)
+        self.typing_interval = 40
+        self.top_layer_timer = QTimer()
+        self.top_layer_timer.timeout.connect(self.ensure_top_layer)
+        self.top_layer_timer.start(3000)
+        self.setAttribute(Qt.WA_InputMethodEnabled, True)
+        self.mousePressEvent = self.start_move
+        self.mouseMoveEvent = self.on_move
+        avatar_url, avatar_base64 = avatar_values_for_emotion(character, "happy")
+        self._set_avatar(
+            image_url=avatar_url,
+            image_base64=avatar_base64,
+            layers=character.expression_layers or DEFAULT_EXPRESSION_LAYERS,
+            fgimage_target=character.fgimage_target,
+        )
+
+    def ensure_top_layer(self) -> None:
+        if not self.isVisible():
+            return
+        self.raise_()
+        apply_top_layer(self, level="screensaver")
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self.ensure_top_layer)
+        QTimer.singleShot(250, self.ensure_top_layer)
+
+    def _create_control_button(self, tooltip: str) -> QToolButton:
+        button = QToolButton(self)
+        button.setFixedSize(self.settings_button_size, self.settings_button_size)
+        button.setToolTip(tooltip)
+        button.setCursor(Qt.PointingHandCursor)
+        button.setStyleSheet(
             """
             QToolButton {
                 background: rgba(255, 255, 255, 210);
@@ -366,20 +405,7 @@ class DesktopPet(QLabel):
             }
             """
         )
-
-        self.typing_timer = QTimer()
-        self.typing_timer.timeout.connect(self._typing_step)
-        self.typing_interval = 40
-        self.setAttribute(Qt.WA_InputMethodEnabled, True)
-        self.mousePressEvent = self.start_move
-        self.mouseMoveEvent = self.on_move
-        avatar_url, avatar_base64 = avatar_values_for_emotion(character, "happy")
-        self._set_avatar(
-            image_url=avatar_url,
-            image_base64=avatar_base64,
-            layers=character.expression_layers or DEFAULT_EXPRESSION_LAYERS,
-            fgimage_target=character.fgimage_target,
-        )
+        return button
 
     def _scale_factor(self) -> float:
         app = QApplication.instance()
@@ -425,18 +451,22 @@ class DesktopPet(QLabel):
         )
         self.setPixmap(pixmap)
         self.resize(pixmap.size())
-        self._position_settings_button()
+        self._position_control_buttons()
         self.update()
 
-    def _position_settings_button(self) -> None:
-        if not hasattr(self, "settings_button"):
+    def _position_control_buttons(self) -> None:
+        if not hasattr(self, "settings_button") or not hasattr(self, "exit_button"):
             return
         margin = self._scaled_value(8)
+        gap = self._scaled_value(8)
         visible_height = max(self.settings_button_size + margin * 2, int(self.height() * self.visible_ratio))
-        x = max(margin, self.width() - self.settings_button_size - margin)
+        total_width = self.settings_button_size * 2 + gap
+        x = max(margin, self.width() - total_width - margin)
         y = max(margin, min(visible_height - self.settings_button_size - margin, visible_height // 2))
         self.settings_button.move(x, y)
+        self.exit_button.move(x + self.settings_button_size + gap, y)
         self.settings_button.raise_()
+        self.exit_button.raise_()
 
     def _set_avatar(
         self,
@@ -738,6 +768,14 @@ def get_character_options(api_client: PetApiClient) -> dict:
 
 
 def open_character_settings(parent: DesktopPet, api_client: PetApiClient) -> None:
+    existing_dialog = getattr(parent, "character_dialog", None)
+    if existing_dialog is not None and existing_dialog.isVisible():
+        parent.hide()
+        existing_dialog.showNormal()
+        existing_dialog.raise_()
+        existing_dialog.activateWindow()
+        return
+
     dialog = CharacterCreatorDialog(
         get_character_options(api_client),
         api_client,
@@ -745,12 +783,26 @@ def open_character_settings(parent: DesktopPet, api_client: PetApiClient) -> Non
         DEFAULT_USER_NAME,
         parent,
     )
-    if dialog.exec_() != QDialog.Accepted:
-        return
-    if dialog.preview_profile is None:
-        return
-    api_client.remember_character(dialog.preview_profile, dialog.preview_user_name)
-    parent.set_character(dialog.preview_profile)
+    parent.character_dialog = dialog
+
+    def apply_preview_profile() -> None:
+        if dialog.preview_profile is None:
+            return
+        api_client.remember_character(dialog.preview_profile, dialog.preview_user_name)
+        parent.set_character(dialog.preview_profile)
+
+    def clear_dialog_reference() -> None:
+        if getattr(parent, "character_dialog", None) is dialog:
+            parent.character_dialog = None
+        parent.show()
+        parent.ensure_top_layer()
+
+    dialog.accepted.connect(apply_preview_profile)
+    dialog.finished.connect(lambda _result: clear_dialog_reference())
+    parent.hide()
+    dialog.show()
+    dialog.raise_()
+    dialog.activateWindow()
 
 
 def regenerate_character_image(parent: DesktopPet, api_client: PetApiClient) -> None:
@@ -778,6 +830,7 @@ def regenerate_character_image(parent: DesktopPet, api_client: PetApiClient) -> 
 if __name__ == "__main__":
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     api_client = PetApiClient()
     desktop_pet = DesktopPet(api_client, load_initial_character(api_client))
     desktop_pet.settings_requested.connect(lambda: open_character_settings(desktop_pet, api_client))
@@ -789,7 +842,7 @@ if __name__ == "__main__":
     desktop_pet.move(x, y)
     desktop_pet.show()
 
-    tray_icon = QSystemTrayIcon(QIcon("icon.png"), parent=app)
+    tray_icon = QSystemTrayIcon(QIcon(str(resource_path("icon.png"))), parent=app)
     tray_menu = QMenu()
     character_action = QAction("角色设置")
     character_action.triggered.connect(desktop_pet.settings_requested.emit)

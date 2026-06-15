@@ -1,6 +1,8 @@
 import json
 import os
 
+from Murasame.paths import copy_seed_file, resolve_user_path, user_data_path
+
 
 DEFAULT_CONFIG = {
     "enable_vl": True,
@@ -68,14 +70,33 @@ def _merge_defaults(base: dict, overrides: dict) -> dict:
 
 
 def get_config() -> dict:
-    with open("./config.json", "r", encoding="utf-8") as f:
-        return _merge_defaults(DEFAULT_CONFIG, json.load(f))
+    path = copy_seed_file("config.json")
+    if not path.exists():
+        save_config(DEFAULT_CONFIG)
+        path = user_data_path("config.json")
+    with path.open("r", encoding="utf-8") as f:
+        config = _merge_defaults(DEFAULT_CONFIG, json.load(f))
+    return _resolve_config_paths(config)
 
 
 def save_config(config: dict) -> None:
-    path = "./config.json"
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
+    path = user_data_path("config.json")
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
         f.write("\n")
     os.replace(tmp_path, path)
+
+
+def _resolve_config_paths(config: dict) -> dict:
+    memory = config.setdefault("memory", {})
+    storage_path = memory.get("storage_path") or DEFAULT_CONFIG["memory"]["storage_path"]
+    memory["storage_path"] = str(resolve_user_path(storage_path))
+
+    mem0 = memory.setdefault("mem0", {})
+    for key in ("history_db_path", "vector_path"):
+        value = mem0.get(key)
+        if value:
+            mem0[key] = str(resolve_user_path(value))
+    return config
