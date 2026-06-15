@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import base64
 import os
-import re
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -101,6 +103,26 @@ def build_image_contact_sheet(entries: list[DesktopEntry], max_thumb_size: int =
     return f"data:image/jpeg;base64,{encoded}"
 
 
+def capture_desktop_data_uri(max_width: int = 1280, jpeg_quality: int = 75) -> str:
+    try:
+        from PIL import ImageGrab
+
+        screenshot = ImageGrab.grab()
+        if not isinstance(screenshot, Image.Image):
+            return ""
+        image = screenshot.convert("RGB")
+        if image.width > max_width:
+            target_height = max(1, int(image.height * max_width / image.width))
+            image = image.resize((max_width, target_height), Image.Resampling.LANCZOS)
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG", quality=jpeg_quality, optimize=True)
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+    except Exception as exc:
+        print(f"Desktop screenshot capture failed: {type(exc).__name__}: {exc}")
+        return ""
+
+
 def metadata_for_entries(entries: list[DesktopEntry]) -> list[dict[str, Any]]:
     return [{"id": entry.id, "name": entry.name, "extension": entry.suffix or ""} for entry in entries]
 
@@ -143,11 +165,28 @@ def trash_files(paths: list[str]) -> list[Path]:
     return trashed
 
 
-def delete_query_from_text(text: str) -> str:
-    query = text.strip()
-    query = re.sub(r"(请|帮我|给我|把|将|桌面上?的?|桌面|删除|删掉|移除|丢掉|清理|图片|照片|文件)", " ", query)
-    query = re.sub(r"\s+", " ", query).strip(" ，。,.")
-    return query or text.strip()
+def google_search_url(query: str) -> str:
+    cleaned = query.strip()
+    if not cleaned:
+        raise ValueError("搜索内容不能为空。")
+    return f"https://www.google.com/search?q={quote_plus(cleaned)}"
+
+
+def open_google_search(query: str) -> str:
+    url = google_search_url(query)
+    if sys.platform == "win32":
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", f'Start-Process chrome "{url}"'],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    elif sys.platform == "darwin":
+        subprocess.run(["open", url], check=True)
+    else:
+        raise RuntimeError("当前平台暂不支持打开网页工具。")
+    return url
 
 
 def _is_allowed_direct_file(desktop_root: Path, path: Path) -> bool:

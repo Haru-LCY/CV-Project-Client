@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import base64
 import traceback
-from io import BytesIO
 
-from PIL import Image
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from Murasame import utils
+from scripts.desktop_tools import capture_desktop_data_uri
 from scripts.pet_api import PetApiClient
 from scripts.profile import PetResponse
 
@@ -35,23 +33,7 @@ class ScreenWorker(QThread):
         self.running = False
 
     def _capture_desktop_data_uri(self) -> str:
-        try:
-            from PIL import ImageGrab
-
-            screenshot = ImageGrab.grab()
-            if not isinstance(screenshot, Image.Image):
-                return ""
-            image = screenshot.convert("RGB")
-            if image.width > self.max_width:
-                target_height = max(1, int(image.height * self.max_width / image.width))
-                image = image.resize((self.max_width, target_height), Image.Resampling.LANCZOS)
-            buffer = BytesIO()
-            image.save(buffer, format="JPEG", quality=self.jpeg_quality, optimize=True)
-            encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-            return f"data:image/jpeg;base64,{encoded}"
-        except Exception as exc:
-            print(f"Desktop screenshot capture failed: {type(exc).__name__}: {exc}")
-            return ""
+        return capture_desktop_data_uri(self.max_width, self.jpeg_quality)
 
 
 class ApiWorker(QThread):

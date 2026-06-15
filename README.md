@@ -198,8 +198,10 @@ python -m scripts.build_executable --dry-run
 
 ## Agent 桌面工具
 
-启用 `agent_tools.enabled` 后，用户输入中的桌面工具请求会先被本地路由处理：
+启用 `agent_tools.enabled` 后，客户端会把本地能力作为 OpenAI 兼容的 native `tools` 发给对话模型，由模型返回 `tool_calls` 后再执行：
 
 - “删除桌面上的白头发少女图片”这类请求会枚举桌面直接图片文件，生成缩略图索引表并调用 `vl.model` 做内容匹配。匹配结果会由角色询问，并在桌宠窗口显示“确认 / 拒绝”选项，确认后才移到废纸篓。
 - “整理桌面 / 给桌面文件分类”这类请求会把桌面直接文件名和扩展名交给文本模型生成分类计划，然后移动到固定白名单文件夹：`图片`、`文档`、`视频`、`音频`、`压缩包`、`安装包`、`代码`、`数据表格`、`快捷方式`、`其他`。
+- “搜索 Python 文档 / 打开网站 PyQt5 教程”这类请求会打开 Google 搜索页。Windows 使用 PowerShell 执行 `Start-Process chrome "https://www.google.com/search?q=..."`，macOS 使用 `open "https://www.google.com/search?q=..."`。
+- 桌面截图读取也封装为 `read_screen` 工具。原有低频桌面观察仍按 `vl.interval_seconds` 触发，默认 30 秒一次；触发后模型会调用 `read_screen` 获取截图摘要。
 - 工具只操作 `agent_tools.desktop_root` 下的直接文件，不递归处理文件夹；模型返回的绝对路径、`../`、非白名单分类都会被拒绝。
