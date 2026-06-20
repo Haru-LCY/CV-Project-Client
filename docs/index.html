@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="MurasamePet 是一个能够观察桌面、调用工具、保留记忆并持续陪伴你的智能桌面角色。"
+    />
+    <meta name="theme-color" content="#101225" />
+    <title>MurasamePet — 看得见，也记得住的智能桌宠</title>
+    <link rel="icon" href="./assets/images/murasame-standee.png" type="image/png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#features">跳到功能展示</a>
+
+    <div class="page-glow page-glow--one" aria-hidden="true"></div>
+    <div class="page-glow page-glow--two" aria-hidden="true"></div>
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="MurasamePet 首页">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span>MurasamePet</span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#technology">技术</a>
+        <a
+          class="nav-github"
+          href="https://github.com/Haru-LCY/CV-Project-Client"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 17 17 7M8 7h9v9" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">
+            <span class="eyebrow-dot"></span>
+            AI × Computer Vision × Desktop Agent
+          </div>
+          <h1>
+            一个真正生活在
+            <span>你桌面上的 AI</span>
+          </h1>
+          <p class="hero-lead">
+            她能看见你的屏幕，理解你正在做什么，调用工具帮你完成任务，
+            也会记住你们共同经历过的事。
+          </p>
+          <div class="hero-actions">
+            <a class="button button--primary" href="#features">
+              查看功能演示
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </a>
+            <a
+              class="button button--ghost"
+              href="https://github.com/Haru-LCY/CV-Project-Client"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.3 3.5 6.5 6.8 6.9A4.8 4.8 0 0 0 8 18v4M8 19c-3 .9-3-1.5-4-2"
+                />
+              </svg>
+              查看源码
+            </a>
+          </div>
+          <dl class="hero-stats" aria-label="项目能力概览">
+            <div>
+              <dt>7</dt>
+              <dd>核心能力演示</dd>
+            </div>
+            <div>
+              <dt>4</dt>
+              <dd>情绪角色状态</dd>
+            </div>
+            <div>
+              <dt>∞</dt>
+              <dd>可持续的记忆</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="hero-visual" aria-label="MurasamePet 桌面角色">
+          <div class="orbit orbit--outer" aria-hidden="true"></div>
+          <div class="orbit orbit--inner" aria-hidden="true"></div>
+          <div class="status-pill status-pill--vision">
+            <span class="status-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <span><strong>视觉在线</strong><small>正在感知桌面</small></span>
+          </div>
+          <div class="status-pill status-pill--memory">
+            <span class="status-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2a5 5 0 0 0-5 5v1a4 4 0 0 0-2 7.5A4 4 0 0 0 9 22h3M12 2a5 5 0 0 1 5 5v1a4 4 0 0 1 2 7.5A4 4 0 0 1 15 22h-3M12 2v20M8 11h4M12 15h4" />
+              </svg>
+            </span>
+            <span><strong>长期记忆</strong><small>已连接</small></span>
+          </div>
+          <div class="character-halo" aria-hidden="true"></div>
+          <img
+            class="hero-character"
+            src="./assets/images/murasame-standee.png"
+            alt="白发水手服 MurasamePet 角色立绘"
+            width="399"
+            height="781"
+          />
+          <div class="hero-shadow" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="capability-strip" aria-label="核心能力">
+        <div><span>01</span>自然交互</div>
+        <div><span>02</span>视觉感知</div>
+        <div><span>03</span>Agent 工具</div>
+        <div><span>04</span>长期记忆</div>
+      </section>
+
+      <section class="features section" id="features">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">FEATURE DEMOS</p>
+            <h2>不止是桌宠，更是你的桌面搭档</h2>
+          </div>
+          <p>
+            从感知、理解到行动，MurasamePet 将多模态模型与本地工具连接起来，
+            让角色真正参与到你的桌面生活中。
+          </p>
+        </div>
+
+        <div class="feature-group">
+          <div class="group-label">
+            <span>01</span>
+            <div>
+              <p>DESKTOP COMPANION</p>
+              <h3>桌宠交互</h3>
+            </div>
+          </div>
+          <div class="feature-grid feature-grid--two">
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/move-resize.mp4"
+                data-title="自由移动与缩放"
+                aria-label="播放：自由移动与缩放"
+              >
+                <img
+                  src="./assets/posters/move-resize.webp"
+                  alt=""
+                  width="1280"
+                  height="835"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:10</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">01</span>
+                <div>
+                  <h4>自由移动与缩放</h4>
+                  <p>拖动角色到桌面的任意位置，并随时调整到适合你的尺寸。</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/character-card.mp4"
+                data-title="角色卡与个性定制"
+                aria-label="播放：角色卡与个性定制"
+              >
+                <img
+                  src="./assets/posters/character-card.webp"
+                  alt=""
+                  width="1280"
+                  height="835"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:18</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">02</span>
+                <div>
+                  <h4>角色卡与个性定制</h4>
+                  <p>组合外貌、性格与自定义设定，生成属于你的专属角色。</p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-group">
+          <div class="group-label">
+            <span>02</span>
+            <div>
+              <p>VISION &amp; ACTION</p>
+              <h3>感知与行动</h3>
+            </div>
+          </div>
+          <div class="feature-grid feature-grid--three">
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/screen-browser-tools.mp4"
+                data-title="理解屏幕，连续调用工具"
+                aria-label="播放：理解屏幕，连续调用工具"
+              >
+                <img
+                  src="./assets/posters/screen-browser-tools.webp"
+                  alt=""
+                  width="1280"
+                  height="800"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:22</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">03</span>
+                <div>
+                  <h4>理解屏幕，连续调用工具</h4>
+                  <p>读取当前屏幕语境，并自主使用浏览器搜索补全信息。</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/desktop-organize.mp4"
+                data-title="识别图片并整理桌面"
+                aria-label="播放：识别图片并整理桌面"
+              >
+                <img
+                  src="./assets/posters/desktop-organize.webp"
+                  alt=""
+                  width="1280"
+                  height="835"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:20</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">04</span>
+                <div>
+                  <h4>识别图片并整理桌面</h4>
+                  <p>用视觉模型找到目标文件，获得确认后安全完成整理。</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/camera-vision.mp4"
+                data-title="通过摄像头看见你"
+                aria-label="播放：通过摄像头看见你"
+              >
+                <img
+                  src="./assets/posters/camera-vision.webp"
+                  alt=""
+                  width="1280"
+                  height="835"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:08</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">05</span>
+                <div>
+                  <h4>通过摄像头看见你</h4>
+                  <p>按需调用摄像头拍照，让多模态模型理解现实场景。</p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-group">
+          <div class="group-label">
+            <span>03</span>
+            <div>
+              <p>IDENTITY &amp; MEMORY</p>
+              <h3>持续的陪伴</h3>
+            </div>
+          </div>
+          <div class="feature-grid feature-grid--two">
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/agent-memory.mp4"
+                data-title="Agent 长期记忆"
+                aria-label="播放：Agent 长期记忆"
+              >
+                <img
+                  src="./assets/posters/agent-memory.webp"
+                  alt=""
+                  width="1280"
+                  height="835"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:17</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">06</span>
+                <div>
+                  <h4>Agent 长期记忆</h4>
+                  <p>把重要对话与桌面活动写入记忆，让下一次相遇延续上次的故事。</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="feature-card">
+              <button
+                class="video-trigger"
+                type="button"
+                data-video="./assets/videos/import-character.mp4"
+                data-title="跨电脑导入已有角色"
+                aria-label="播放：跨电脑导入已有角色"
+              >
+                <img
+                  src="./assets/posters/import-character.webp"
+                  alt=""
+                  width="1280"
+                  height="800"
+                  loading="lazy"
+                />
+                <span class="play-button" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z" /></svg>
+                </span>
+                <span class="duration">00:25</span>
+              </button>
+              <div class="feature-card-copy">
+                <span class="card-index">07</span>
+                <div>
+                  <h4>跨电脑导入已有角色</h4>
+                  <p>通过角色卡迁移身份设定，把熟悉的角色带到另一台电脑。</p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="technology section" id="technology">
+        <div class="technology-copy">
+          <p class="section-kicker">BEHIND THE CHARACTER</p>
+          <h2>让角色真正进入你的数字生活</h2>
+          <p>
+            MurasamePet 不是一个停留在聊天窗口里的角色。她通过桌面视觉获得上下文，
+            由 Agent 编排本地工具执行任务，再用记忆系统维持长期、连贯的关系。
+          </p>
+          <a
+            class="text-link"
+            href="https://github.com/Haru-LCY/CV-Project-Client"
+            target="_blank"
+            rel="noreferrer"
+          >
+            探索项目实现
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 17 17 7M8 7h9v9" />
+            </svg>
+          </a>
+        </div>
+        <div class="technology-map" aria-label="MurasamePet 技术流程">
+          <div class="tech-node tech-node--vision">
+            <span>01</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <strong>多模态视觉</strong>
+            <small>屏幕 · 图片 · 摄像头</small>
+          </div>
+          <div class="tech-arrow" aria-hidden="true">→</div>
+          <div class="tech-node tech-node--agent">
+            <span>02</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+            <strong>Agent 推理</strong>
+            <small>理解 · 规划 · 决策</small>
+          </div>
+          <div class="tech-arrow" aria-hidden="true">→</div>
+          <div class="tech-node tech-node--tools">
+            <span>03</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m14.7 6.3 3-3a2.1 2.1 0 0 1 3 3l-3 3M9.3 17.7l-3 3a2.1 2.1 0 0 1-3-3l3-3M8 12h8M12 8v8" />
+            </svg>
+            <strong>本地工具</strong>
+            <small>搜索 · 整理 · 拍照</small>
+          </div>
+          <div class="memory-loop" aria-hidden="true">
+            <span>长期记忆持续参与</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-section section">
+        <img src="./assets/images/logo.png" alt="" aria-hidden="true" />
+        <div>
+          <p class="section-kicker">OPEN SOURCE PROJECT</p>
+          <h2>把一个有记忆的角色，带到你的桌面</h2>
+          <p>项目采用 Python、PyQt、Computer Vision 与 OpenAI 兼容接口构建。</p>
+        </div>
+        <a
+          class="button button--light"
+          href="https://github.com/Haru-LCY/CV-Project-Client"
+          target="_blank"
+          rel="noreferrer"
+        >
+          在 GitHub 上查看
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 17 17 7M8 7h9v9" />
+          </svg>
+        </a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="#">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span>MurasamePet</span>
+      </a>
+      <p>看得见，也记得住的智能桌面角色。</p>
+      <p>© <span id="current-year">2026</span> MurasamePet</p>
+    </footer>
+
+    <dialog class="video-modal" aria-labelledby="video-modal-title">
+      <div class="modal-shell">
+        <div class="modal-header">
+          <div>
+            <span class="live-dot" aria-hidden="true"></span>
+            <h2 id="video-modal-title">功能演示</h2>
+          </div>
+          <button class="modal-close" type="button" aria-label="关闭视频">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <video controls playsinline preload="metadata"></video>
+      </div>
+    </dialog>
+  </body>
+</html>
